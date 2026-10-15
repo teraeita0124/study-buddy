@@ -10,11 +10,45 @@
 <body>
 <header class="top"><h1>今日の学習</h1><span id="now-clock" class="clock" aria-label="現在時刻"></span>
 <nav aria-label="メニュー">
-<button data-go="today">計画</button><button data-go="log">記録</button><button data-go="data">データ</button>
+<button data-go="tasks">タスク</button><button data-go="today">計画</button><button data-go="log">記録</button><button data-go="peers">みんな</button><button data-go="data">データ</button>
 </nav></header>
 <div id="err" role="alert" hidden></div>
 <main>
-<section id="v-today">
+<section id="v-tasks" hidden>
+<h2>今日のタスク</h2><p id="t-date" class="hint"></p>
+<div id="t-carry"></div>
+<form id="task-form" autocomplete="off">
+<label>やること<input id="t-title" required maxlength="60" placeholder="例：英単語を20個覚える"></label>
+<label>教科<input id="t-subject" maxlength="30" placeholder="例：英語"></label>
+<fieldset><legend>優先度（自分で決める・あとで変えられる）</legend>
+<label class="r"><input type="radio" name="prio" value="1">高：先にやる</label>
+<label class="r"><input type="radio" name="prio" value="2" checked>中</label>
+<label class="r"><input type="radio" name="prio" value="3">低：余裕があれば</label></fieldset>
+<button class="main" type="submit">タスクを追加</button>
+</form>
+<div id="t-list"></div>
+<h3>今日の振り返り</h3><p id="rv-stat" class="hint"></p>
+<form id="rv-form" autocomplete="off">
+<label>今日できたこと<input id="rv-good" maxlength="200" placeholder="例：英単語を10個覚えた"></label>
+<label>明日に生かすこと<input id="rv-next" maxlength="200" placeholder="例：先に簡単な問題から始める"></label>
+<button class="main" type="submit">振り返りを保存</button><p id="rv-msg" role="status"></p>
+</form>
+</section>
+
+<section id="v-peers" hidden>
+<h2>仲間の状況</h2>
+<p>このアプリにはサーバーがないため、リアルタイムでは見られません。友だちが書き出した「状況カード」を読み込むと、その人の状況を見られます。</p>
+<fieldset><legend>自分の状況カード</legend>
+<label>表示名（本名でなくてよい）<input id="pc-name" maxlength="12" placeholder="例：ゆうと"></label>
+<p class="hint">カードに入るのは、直近7日の日ごとの学習分と、今日のタスクの完了数だけです。課題名・自由記述・個別の記録は入りません。渡す相手は自分で選べます。</p>
+<button class="main" id="pc-make">カードを書き出す</button></fieldset>
+<label class="file">仲間のカードを読み込む<input type="file" id="pc-import" accept=".json,application/json"></label>
+<p id="pc-msg" role="status" class="hint"></p>
+<div id="pc-list"></div>
+<p class="hint">並びは更新が新しい順で、順位ではありません。読み込んだカードはこの端末にだけ保存され、いつでも削除できます。</p>
+</section>
+
+<section id="v-today" hidden>
 <details class="about" open><summary>このアプリの考え方</summary>
 <p>前提：学習には、集中できる状態と、睡眠や開始時刻などの生活リズムの安定が土台になる、という考えでつくっています。</p>
 <p>私たちの調査（135回答）では、計画を立てる人ほど集中の自己評価が高く、開始時刻を決めている人ほど平日の学習時間が長い傾向が見えました。就寝時刻を決めている人ほど、計画も立てている傾向がありました。ただし原因までは確認できていません。短い時間でいいので、「いつ・何から」を決め、スマホから離れて始めてみましょう。</p></details>
@@ -54,6 +88,7 @@
 <p class="hint center">スマホは見えない所へ。終わるまで、この画面だけ。</p>
 <p id="r-state"></p>
 <p id="r-methods" class="label"></p><p id="r-resume"></p>
+<div id="r-tasks"></div>
 <div id="r-pomo" hidden><p id="r-pomo-info"></p><button type="button" class="tab" id="b-sound">音：オン</button>
 <div id="r-pomo-alert" hidden role="status"><button class="main" id="pm-break">休憩する</button><button class="main alt" id="pm-go">続ける（次の区切りまで同じ時間）</button></div></div>
 <div id="r-paused" hidden><p class="label">休憩・一時停止の前に決めておく（任意）</p>

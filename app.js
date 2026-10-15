@@ -55,21 +55,26 @@ function nowIso() { return new Date().toISOString(); }
 
 // ===== 画面切り替え（同じHTML内） =====
 function show(name) {
-  ['today', 'run', 'reflect', 'log', 'data'].forEach(function (n) { $('v-' + n).hidden = n !== name; });
+  ['tasks', 'today', 'run', 'reflect', 'log', 'peers', 'data'].forEach(function (n) { $('v-' + n).hidden = n !== name; });
   document.querySelectorAll('[data-go]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.go === name)); }); // 今いるタブを示す
   $('toast').hidden = true; document.body.classList.toggle('focus', name === 'run'); // 学習中はメニューを隠す
   setWake(name === 'run'); if (name === 'reflect') renderLeaveNote();
+  if (name === 'tasks') renderTasksView();
+  if (name === 'run') renderRunTasks();
+  if (name === 'peers') renderPeers();
   if (name === 'today') renderToday();
   if (name === 'log') renderLog();
   if (name === 'run') renderRun();
   window.scrollTo(0, 0);
 }
-function routeByState() {
+function routeByState(first) {
   var d = load(), a = active(d);
   if (a) return show('run');
   var u = d.records.filter(function (r) { return r.status === 'ended'; })[0]; // 振り返り待ち
   if (u) return show('reflect');
-  show('today');
+  var cur = ['tasks', 'today', 'log', 'peers', 'data'].filter(function (n) { return !$('v-' + n).hidden; })[0];
+  // 起動時、今日のタスクが未入力ならタスク画面から始める。それ以外は今いる画面を保つ
+  show(first ? (getDay(d, dayKey()).tasks.length ? 'today' : 'tasks') : (cur || 'today'));
 }
 
 // ===== 1. 今日の計画 =====
@@ -267,7 +272,7 @@ function renderLog() {
   var ac = { achieved: 0, partial: 0, not: 0 }; recs.forEach(function (r) { ac[r.achievement]++; });
   txt += '／達成 ' + ac.achieved + '・一部達成 ' + ac.partial + '・未達成 ' + ac.not;
   s.textContent = txt + '。計測時間はアプリの操作から求めた値で、実際に勉強していた時間を保証しません。';
-  renderInsights(recs);
+  renderInsights(recs); renderDayReviews(d);
   recs.slice().reverse().forEach(function (r) {
     var c = document.createElement('div'); c.className = 'card';
     var lines = [r.subject + '／' + r.task, '予定：' + (r.plannedStart ? fmtDate(r.plannedStart) : '（今から始める）') + '　開始：' + fmtDate(r.startedAt),
@@ -312,6 +317,7 @@ function importJson(file) {
         else if (JSON.stringify(cur) === JSON.stringify(r)) same++;
         else conflict++; // 同じIDで内容が違う→上書きしない
       });
+      mergeDays(d, inc.days); // タスクと1日の振り返りも統合（同じIDは追加しない）
     });
     if (ok) { msg('追加 ' + added + '件／同じ記録 ' + same + '件／IDが重複して内容が違うため追加しなかった ' + conflict + '件'); }
   };
@@ -378,7 +384,7 @@ function buildCsvOpts() {
 }
 function deleteAll() {
   if (!confirm('このアプリの記録をすべて削除します。元に戻せません。先にJSONで書き出しておくと安心です。削除しますか？')) return;
-  try { localStorage.removeItem(KEY); blocked = false; msg('削除しました。'); } catch (e) { showErr('削除できませんでした。'); }
+  try { localStorage.removeItem(KEY); localStorage.removeItem(PK); blocked = false; msg('削除しました。'); } catch (e) { showErr('削除できませんでした。'); }
 }
 
 // ===== 学習方法・困りごと・再開支援 =====
@@ -576,6 +582,194 @@ function setWake(on) {
   } catch (e) {}
 }
 
+// ===== 今日のタスク・優先度・1日の振り返り =====
+// d.days['YYYY-MM-DD'] = { tasks:[{id,title,subject,priority(1高/2中/3低),done,doneAt,order}], review:{good,next,at} }
+var PL = ['', '高', '中', '低'];
+function p2(n) { return (n < 10 ? '0' : '') + n; }
+function dayKey(t) { var d = t ? new Date(t) : new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function daysAgo(n) { var d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate() - n); }
+function getDay(d, k) { d.days = d.days || {}; return d.days[k] || (d.days[k] = { tasks: [], review: null }); }
+function sortTasks(ts) { return ts.slice().sort(function (a, b) { return a.priority - b.priority || a.order - b.order; }); } // 優先度の高い順
+function validTask(t) { return t && typeof t.id === 'string' && typeof t.title === 'string' && t.title.length <= 100 && t.priority >= 1 && t.priority <= 3 && typeof t.done === 'boolean'; }
+function mergeDays(d, days) {
+  if (!days || typeof days !== 'object') return;
+  Object.keys(days).forEach(function (k) {
+    var s = days[k]; if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !s || !Array.isArray(s.tasks)) return;
+    var cur = getDay(d, k);
+    s.tasks.forEach(function (t) { if (validTask(t) && !cur.tasks.some(function (x) { return x.id === t.id; })) cur.tasks.push(t); });
+    if (!cur.review && s.review && typeof s.review.good === 'string' && typeof s.review.next === 'string') cur.review = s.review;
+  });
+}
+function progressEl(done, total) {
+  var w = document.createElement('div'), p = document.createElement('div'), i = document.createElement('i'), t = document.createElement('p');
+  p.className = 'prog'; p.setAttribute('role', 'progressbar'); p.setAttribute('aria-valuemin', 0); p.setAttribute('aria-valuemax', total); p.setAttribute('aria-valuenow', done);
+  i.style.width = (total ? Math.round(done / total * 100) : 0) + '%'; p.appendChild(i);
+  t.textContent = total ? '進み具合：' + done + ' / ' + total + ' 完了' : 'タスクはまだありません'; t.style.margin = '0';
+  w.appendChild(t); w.appendChild(p); return w;
+}
+function taskRow(t, full) {
+  var c = document.createElement('div'); c.className = 'card';
+  var l = document.createElement('label'); l.className = 'tk' + (t.done ? ' done' : '');
+  var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = t.done; cb.onchange = function () { toggleTask(t.id); };
+  var s = document.createElement('span'); s.className = 't'; s.textContent = t.title + (t.subject ? '（' + t.subject + '）' : '');
+  var pr = document.createElement('span'); pr.className = 'pr pr' + t.priority; pr.textContent = '優先度：' + PL[t.priority];
+  l.appendChild(cb); l.appendChild(s); l.appendChild(pr); c.appendChild(l);
+  if (full) {
+    c.appendChild(btn('優先度を変える', function () { cyclePrio(t.id); }));
+    if (!t.done) c.appendChild(btn('これで学習する', function () { useForStudy(t); }));
+    c.appendChild(btn('削除', function () { if (confirm('このタスクを削除しますか？')) delTask(t.id); }));
+  }
+  return c;
+}
+function todayTasks(d) { return getDay(d, dayKey()).tasks; }
+function mutateTask(id, fn) { update(function (d) { var t = todayTasks(d).filter(function (x) { return x.id === id; })[0]; if (!t) return false; fn(t); }); renderTaskList(); renderRunTasks(); }
+function toggleTask(id) { mutateTask(id, function (t) { t.done = !t.done; t.doneAt = t.done ? nowIso() : null; }); }
+function cyclePrio(id) { mutateTask(id, function (t) { t.priority = t.priority % 3 + 1; }); }
+function delTask(id) { update(function (d) { var day = getDay(d, dayKey()); day.tasks = day.tasks.filter(function (x) { return x.id !== id; }); }); renderTaskList(); }
+function useForStudy(t) { show('today'); $('f-subject').value = t.subject || $('f-subject').value; $('f-task').value = t.title; $('f-step').focus(); }
+function addTask() {
+  var f = $('task-form'); if (!f.reportValidity()) return;
+  var pr = Number(document.querySelector('input[name=prio]:checked').value);
+  var ok = update(function (d) {
+    var day = getDay(d, dayKey());
+    if (day.tasks.length >= 30) { showErr('1日に追加できるタスクは30個までです。'); return false; }
+    day.tasks.push({ id: uid(), title: $('t-title').value.trim(), subject: $('t-subject').value.trim(), priority: pr, done: false, doneAt: null, order: Date.now() });
+  });
+  if (ok) { $('t-title').value = ''; renderTaskList(); $('t-title').focus(); }
+}
+function carryOver() {
+  update(function (d) {
+    var src = d.days && d.days[dayKey(daysAgo(1))]; if (!src) return false;
+    var day = getDay(d, dayKey());
+    src.tasks.filter(function (x) { return !x.done; }).forEach(function (x, i) {
+      if (day.tasks.length < 30 && !day.tasks.some(function (z) { return z.title === x.title; }))
+        day.tasks.push({ id: uid(), title: x.title, subject: x.subject, priority: x.priority, done: false, doneAt: null, order: Date.now() + i });
+    });
+  });
+  renderTaskList();
+}
+function renderTaskList() {
+  var d = load(), ts = sortTasks(todayTasks(d)), box = $('t-list'); box.textContent = '';
+  var done = ts.filter(function (t) { return t.done; }).length;
+  box.appendChild(progressEl(done, ts.length));
+  ts.forEach(function (t) { box.appendChild(taskRow(t, true)); });
+  var y = d.days && d.days[dayKey(daysAgo(1))], left = y ? y.tasks.filter(function (x) { return !x.done; }).length : 0;
+  $('t-carry').textContent = '';
+  if (left) $('t-carry').appendChild(btn('昨日の残り ' + left + ' 件を今日に持ち越す', carryOver));
+  var now = new Date().toDateString(), ms = 0, n = 0;
+  d.records.forEach(function (r) { if (r.status === 'done' && new Date(r.startedAt).toDateString() === now) { ms += measuredMs(r, 0); n++; } });
+  $('rv-stat').textContent = 'タスク ' + done + '/' + ts.length + ' 完了／今日の学習 ' + n + '回・操作記録で合計' + Math.round(ms / 60000) + '分';
+}
+function renderRunTasks() { // 学習中：残りのタスクをチェックで消していく
+  var box = $('r-tasks'); box.textContent = '';
+  var ts = sortTasks(todayTasks(load())); if (!ts.length) return;
+  var rest = ts.filter(function (t) { return !t.done; });
+  box.appendChild(progressEl(ts.length - rest.length, ts.length));
+  if (!rest.length) { var p = document.createElement('p'); p.textContent = '今日のタスクは全部終わりました。'; box.appendChild(p); }
+  rest.forEach(function (t) { box.appendChild(taskRow(t, false)); });
+}
+function renderTasksView() {
+  $('t-date').textContent = new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }) + '　まず、今日やりたいことを書き出して、優先度を決めましょう。';
+  var r = getDay(load(), dayKey()).review;
+  $('rv-good').value = r ? r.good : ''; $('rv-next').value = r ? r.next : ''; $('rv-msg').textContent = '';
+  renderTaskList();
+}
+function saveReview(e) {
+  e.preventDefault();
+  var g = $('rv-good').value.trim(), n = $('rv-next').value.trim();
+  if (!g && !n) { $('rv-msg').textContent = 'どちらか1つでも書くと保存できます。'; return; }
+  var ok = update(function (d) { getDay(d, dayKey()).review = { good: g, next: n, at: nowIso() }; });
+  if (ok) $('rv-msg').textContent = '保存しました。おつかれさま。';
+}
+function renderDayReviews(d) {
+  var keys = Object.keys(d.days || {}).filter(function (k) {
+    var v = d.days[k].review; return v && (v.good || v.next) && (period === 'all' || Date.parse(k) >= Date.now() - 7 * 864e5);
+  }).sort().reverse();
+  if (!keys.length) return;
+  var box = $('insights'), h = document.createElement('h3'); h.textContent = '1日の振り返り'; box.appendChild(h);
+  keys.forEach(function (k) {
+    var v = d.days[k].review, c = document.createElement('div'); c.className = 'card';
+    c.textContent = k + '　できたこと：' + (v.good || '―') + '／明日に生かすこと：' + (v.next || '―'); box.appendChild(c);
+  });
+}
+function initTasks() {
+  $('task-form').onsubmit = function (e) { e.preventDefault(); addTask(); };
+  $('rv-form').onsubmit = saveReview;
+  $('pc-make').onclick = exportCard;
+  $('pc-import').onchange = function (e) { if (e.target.files[0]) importCard(e.target.files[0]); e.target.value = ''; };
+}
+
+// ===== 仲間の状況カード =====
+// サーバーなし。本人が書き出したカード（ファイル）を、見る人が読み込む。順位づけはしない。
+var PK = 'gakushu-shien:peers', CK = 'gakushu-shien:cardid';
+function loadPeers() { try { var a = JSON.parse(localStorage.getItem(PK) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function savePeers(a) { try { localStorage.setItem(PK, JSON.stringify(a)); return true; } catch (e) { showErr('保存できませんでした。ブラウザの設定を確認してください。'); return false; } }
+function myCardId() { try { var v = localStorage.getItem(CK); if (!v) { v = uid(); localStorage.setItem(CK, v); } return v; } catch (e) { return 'local'; } }
+function makeCard(name) {
+  var d = load(), days = [];
+  for (var i = 6; i >= 0; i--) days.push({ d: dayKey(daysAgo(i)), min: 0 });
+  d.records.forEach(function (r) {
+    if (r.status !== 'done') return;
+    var k = dayKey(r.startedAt); days.forEach(function (y) { if (y.d === k) y.min += measuredMs(r, 0) / 60000; });
+  });
+  days.forEach(function (y) { y.min = Math.round(y.min); });
+  var ts = todayTasks(d);
+  return { kind: 'gakushu-card', v: 1, id: myCardId(), name: (name || '').trim().slice(0, 12) || '名無し', made: nowIso(), days: days,
+    taskDone: ts.filter(function (t) { return t.done; }).length, taskTotal: ts.length };
+}
+function exportCard() { var c = makeCard($('pc-name').value); download('card-' + stamp() + '.json', JSON.stringify(c), 'application/json'); renderPeers(); }
+function cleanCard(c) { // 形式を検査し、必要な項目だけ作り直す（余計な項目は捨てる）
+  var num = function (x, max) { return typeof x === 'number' && x >= 0 && x <= max && isFinite(x); };
+  if (!c || c.kind !== 'gakushu-card' || c.v !== 1 || typeof c.id !== 'string' || c.id.length > 64 || typeof c.name !== 'string' || isNaN(Date.parse(c.made))) return null;
+  if (!Array.isArray(c.days) || !c.days.length || c.days.length > 7 || !num(c.taskDone, 99) || !num(c.taskTotal, 99)) return null;
+  for (var i = 0; i < c.days.length; i++) if (!c.days[i] || !/^\d{4}-\d{2}-\d{2}$/.test(c.days[i].d) || !num(c.days[i].min, 1440)) return null;
+  return { id: c.id, name: c.name.slice(0, 12) || '名無し', made: c.made, taskDone: c.taskDone, taskTotal: c.taskTotal,
+    days: c.days.map(function (y) { return { d: y.d, min: Math.round(y.min) }; }) };
+}
+function importCard(file) {
+  var fr = new FileReader();
+  fr.onload = function () {
+    var raw, c;
+    try { raw = JSON.parse(fr.result); } catch (e) { $('pc-msg').textContent = 'カードとして読めませんでした。'; return; }
+    c = cleanCard(raw);
+    if (!c) { $('pc-msg').textContent = '状況カードの形式ではありません。'; return; }
+    if (c.id === myCardId()) { $('pc-msg').textContent = '自分のカードです。'; return; }
+    var a = loadPeers().filter(function (x) { return x.id !== c.id; }); // 同じ人のカードは新しいもので置き換える
+    if (a.length >= 20) { $('pc-msg').textContent = '読み込めるのは20人分までです。不要なカードを削除してください。'; return; }
+    a.push(c); if (savePeers(a)) { $('pc-msg').textContent = c.name + ' さんのカードを読み込みました。'; renderPeers(); }
+  };
+  fr.readAsText(file);
+}
+function cardEl(c, mine) {
+  var el = document.createElement('div'); el.className = 'card';
+  var h = document.createElement('div'); h.style.fontWeight = '700';
+  var ago = Math.floor((Date.now() - Date.parse(c.made)) / 864e5);
+  h.textContent = c.name + (mine ? '（自分）' : '') + '　' + (ago <= 0 ? '今日のカード' : ago + '日前のカード'); el.appendChild(h);
+  var w = document.createElement('div'); w.className = 'week';
+  var max = Math.max(20, Math.max.apply(null, c.days.map(function (y) { return y.min; }))), tot = 0, n = 0;
+  c.days.forEach(function (y) {
+    tot += y.min; if (y.min) n++;
+    var col = document.createElement('div'); col.className = 'wk';
+    var bar = document.createElement('div'); bar.className = 'bar' + (y.min ? ' on' : ''); bar.style.height = Math.max(4, Math.round(y.min / max * 48)) + 'px';
+    var t = document.createElement('span'); t.textContent = '日月火水木金土'.charAt(new Date(y.d + 'T00:00:00').getDay());
+    col.appendChild(bar); col.appendChild(t); w.appendChild(col);
+  });
+  el.appendChild(w);
+  var p = document.createElement('div'); p.textContent = n + '日・合計' + tot + '分／カード作成日のタスク ' + c.taskDone + '/' + c.taskTotal + ' 完了'; el.appendChild(p);
+  return el;
+}
+function renderPeers() {
+  var box = $('pc-list'); box.textContent = '';
+  var mine = makeCard($('pc-name').value); box.appendChild(cardEl(mine, true));
+  var a = loadPeers().sort(function (x, y) { return Date.parse(y.made) - Date.parse(x.made); });
+  if (!a.length) { var p = document.createElement('p'); p.textContent = 'まだ仲間のカードはありません。友だちにカードを書き出してもらい、ここで読み込みましょう。'; box.appendChild(p); }
+  a.forEach(function (c) {
+    var el = cardEl(c, false);
+    el.appendChild(btn('このカードを削除', function () { savePeers(loadPeers().filter(function (x) { return x.id !== c.id; })); renderPeers(); }));
+    box.appendChild(el);
+  });
+}
+
 // ===== 起動 =====
 document.querySelectorAll('[data-go]').forEach(function (b) { b.onclick = function () { show(b.dataset.go); }; });
 $('plan-form').onsubmit = function (e) { e.preventDefault(); submitPlan('planned'); };
@@ -588,4 +782,4 @@ $('b-import').onchange = function (e) { if (e.target.files[0]) importJson(e.targ
 buildChips('ch-prep', 'pp', PREP); buildTemplates(); initSound(); tickClock(); setInterval(tickClock, 1000);
 buildChips('ch-plan', 'mp', METHODS); buildChips('ch-used', 'mu', METHODS); buildChips('ch-trouble', 'tg', TAGS);
 ['f-rstep', 'f-rat', 'f-rbrk'].forEach(function (id) { $(id).onchange = savePauseFields; });
-buildFocus(); buildCsvOpts(); routeByState();
+initTasks(); buildFocus(); buildCsvOpts(); routeByState(true);
