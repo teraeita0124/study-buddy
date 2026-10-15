@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>今日の学習</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,6 +22,11 @@
 <label>最初の一歩<input id="f-step" required maxlength="80" placeholder="例：問題1の図を描く"></label>
 <label>終了条件<input id="f-end" required maxlength="80" placeholder="例：問題1〜3を解き、誤りを確認する"></label>
 <label>開始予定日時<input id="f-when" type="datetime-local"></label>
+<fieldset><legend>区切りタイマー（ポモドーロ式・任意）</legend>
+<label class="opt"><input type="checkbox" id="f-pomo">使う</label>
+<label>作業（分）<input id="f-pw" type="number" min="1" max="180" value="25"></label>
+<label>休憩（分）<input id="f-pb" type="number" min="1" max="60" value="5"></label>
+<p class="hint">25分・5分は広く使われる例で、全員に最適という意味ではありません。自分に合わせて変えてください。時間が来ても自動では止まりません。</p></fieldset>
 <div id="next-box" hidden><p>前回の「次回試すこと」（押すと最初の一歩に入ります）</p><div id="next-list"></div></div>
 <button type="submit" class="main" id="btn-save">計画を保存</button>
 <button type="button" class="main alt" id="btn-now">今から始める</button>
@@ -33,6 +39,8 @@
 <p class="label">終了条件</p><p id="r-end" class="big"></p>
 <p id="r-time" class="timer" aria-live="off">0:00</p>
 <p id="r-state"></p>
+<div id="r-pomo" hidden><p id="r-pomo-info"></p>
+<div id="r-pomo-alert" hidden role="status"><button class="main" id="pm-break">休憩する</button><button class="main alt" id="pm-go">続ける（次の区切りまで同じ時間）</button></div></div>
 <button class="main" id="btn-pause">一時停止</button>
 <button class="main alt" id="btn-finish">学習を終える</button>
 </section>

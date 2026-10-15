@@ -1,7 +1,7 @@
 'use strict';
 // ===== 設定 =====
 var KEY = 'gakushu-shien:v1';   // 保存キー（アプリ固有）
-var FMT = 1, APP_VER = '0.1.0'; // データ形式とアプリのバージョン
+var FMT = 1, APP_VER = '0.2.0'; // データ形式とアプリのバージョン
 var $ = function (id) { return document.getElementById(id); };
 var blocked = false;            // 壊れたデータを上書きしないための目印
 var editingId = null, period = '7';
@@ -56,6 +56,7 @@ function nowIso() { return new Date().toISOString(); }
 // ===== 画面切り替え（同じHTML内） =====
 function show(name) {
   ['today', 'run', 'reflect', 'log', 'data'].forEach(function (n) { $('v-' + n).hidden = n !== name; });
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.go === name)); }); // 今いるタブを示す
   if (name === 'today') renderToday();
   if (name === 'log') renderLog();
   if (name === 'run') renderRun();
@@ -100,17 +101,25 @@ function editPlan(r) {
   editingId = r.id;
   $('f-subject').value = r.subject; $('f-task').value = r.task; $('f-step').value = r.firstStep; $('f-end').value = r.endCondition;
   $('f-when').value = r.plannedStart ? localInputValue(new Date(r.plannedStart)) : '';
+  $('f-pomo').checked = !!r.pomo; $('f-pw').value = r.pomo ? r.pomo.work : 25; $('f-pb').value = r.pomo ? r.pomo.brk : 5;
   $('btn-save').textContent = '変更を保存';
 }
 function readForm(mode) {
-  var w = $('f-when').value;
-  return { subject: $('f-subject').value.trim(), task: $('f-task').value.trim(), firstStep: $('f-step').value.trim(),
+  var w = $('f-when').value, pomo = null;
+  if ($('f-pomo').checked) {
+    var pw = Number($('f-pw').value), pb = Number($('f-pb').value);
+    if (!(pw >= 1 && pw <= 180 && pb >= 1 && pb <= 60)) { showErr('作業は1〜180分、休憩は1〜60分で入力してください。'); return null; }
+    pomo = { work: Math.round(pw), brk: Math.round(pb) };
+  }
+  return { pomo: pomo, subject: $('f-subject').value.trim(), task: $('f-task').value.trim(), firstStep: $('f-step').value.trim(),
     endCondition: $('f-end').value.trim(), startMode: mode, plannedStart: (mode === 'planned' && w) ? new Date(w).toISOString() : null };
 }
 function submitPlan(mode) {
   var f = $('plan-form');
   if (!f.reportValidity()) return;
-  var data = readForm(mode), newId = uid(), ok;
+  var data = readForm(mode);
+  if (!data) return;
+  var newId = uid(), ok;
   if (editingId && mode === 'planned') {
     ok = update(function (d) { var r = find(d, editingId); if (!r || r.status !== 'planned') return false; Object.assign(r, data); });
   } else {
@@ -132,13 +141,14 @@ function startRecord(id) {
     var r = find(d, id);
     if (!r || r.status !== 'planned' || active(d)) return false; // 二重開始・連打を防ぐ
     r.status = 'running'; r.startedAt = nowIso();
+    if (r.pomo) r.pomoNext = r.pomo.work * 60000; // 計測時間がこの値になったら区切りを知らせる
   });
   if (ok) show('run'); else routeByState();
 }
 function pauseResume() {
   update(function (d) {
     var r = active(d); if (!r) return false;
-    if (r.status === 'running') { r.status = 'paused'; r.pauses.push({ from: nowIso(), to: null }); }
+    if (r.status === 'running') { r.status = 'paused'; r.pauses.push({ from: nowIso(), to: null, kind: 'manual' }); }
     else { r.status = 'running'; r.pauses[r.pauses.length - 1].to = nowIso(); }
   });
   renderRun();
@@ -159,6 +169,40 @@ function renderRun() {
   $('r-time').textContent = fmtClock(measuredMs(a, Date.now()));
   $('r-state').textContent = a.status === 'paused' ? '一時停止中（この時間は含まれません）' : '学習中';
   $('btn-pause').textContent = a.status === 'paused' ? '再開' : '一時停止';
+  renderPomo(a);
+}
+// ===== 区切りタイマー（ポモドーロ式） =====
+// 休憩は「一時停止（kind:'break'）」として保存するので、休憩中の時間は計測時間に入らない。
+// 区切りは画面で知らせるだけ。自動で止めたり、休憩を強制したりしない。
+function renderPomo(a) {
+  var pm = a.pomo; $('r-pomo').hidden = !pm;
+  if (!pm) return;
+  var now = Date.now(), last = a.pauses[a.pauses.length - 1], info = $('r-pomo-info'), al = $('r-pomo-alert');
+  al.hidden = true;
+  if (a.status === 'paused' && last && last.kind === 'break') {
+    var left = Date.parse(last.from) + pm.brk * 60000 - now;
+    info.textContent = left > 0 ? '休憩中。予定の休憩時間まであと ' + fmtClock(left) : '予定の休憩時間（' + pm.brk + '分）が過ぎました。準備ができたら「再開」を押してください。';
+  } else if (a.status === 'running') {
+    var rem = a.pomoNext - measuredMs(a, now);
+    info.textContent = rem > 0 ? '次の区切りまで ' + fmtClock(rem) : '設定した作業時間（' + pm.work + '分）が経ちました。休憩するか、続けるか選べます。';
+    al.hidden = rem > 0;
+  } else { info.textContent = '一時停止中'; }
+}
+function startBreak() {
+  update(function (d) {
+    var r = active(d); if (!r || r.status !== 'running' || !r.pomo) return false;
+    r.pauses.push({ from: nowIso(), to: null, kind: 'break' });
+    r.status = 'paused';
+    r.pomoNext = measuredMs(r, Date.now()) + r.pomo.work * 60000; // 再開後は新しい作業ブロック
+  });
+  renderRun();
+}
+function keepGoing() {
+  update(function (d) {
+    var r = active(d); if (!r || !r.pomo) return false;
+    r.pomoNext = measuredMs(r, Date.now()) + r.pomo.work * 60000;
+  });
+  renderRun();
 }
 setInterval(function () { if (!$('v-run').hidden) renderRun(); }, 1000);
 // 別タブ・画面ロックから戻ったら、保存した時刻から再計算
@@ -205,6 +249,7 @@ function renderLog() {
     var c = document.createElement('div'); c.className = 'card';
     var lines = [r.subject + '／' + r.task, '予定：' + (r.plannedStart ? fmtDate(r.plannedStart) : '（今から始める）') + '　開始：' + fmtDate(r.startedAt),
       '計測 ' + Math.round(measuredMs(r, now) / 60000) + '分　' + ACH[r.achievement] + '　集中：' + (r.focus === null ? '未回答' : r.focus),
+      r.pomo ? '区切りタイマー：作業' + r.pomo.work + '分／休憩' + r.pomo.brk + '分、休憩 ' + breaks(r).n + '回' : '',
       r.trouble ? '困ったこと：' + r.trouble : '', r.nextTry ? '次回試すこと：' + r.nextTry : ''];
     lines.filter(Boolean).forEach(function (t) { var p = document.createElement('div'); p.textContent = t; c.appendChild(p); });
     l.appendChild(c);
@@ -221,7 +266,8 @@ function exportJson() { download('gakushu-' + stamp() + '.json', JSON.stringify(
 function validRecord(r) {
   return r && typeof r.id === 'string' && typeof r.subject === 'string' && typeof r.task === 'string' &&
     ['planned', 'running', 'paused', 'ended', 'done'].indexOf(r.status) >= 0 &&
-    (r.startedAt === null || !isNaN(Date.parse(r.startedAt))) && Array.isArray(r.pauses);
+    (r.startedAt === null || !isNaN(Date.parse(r.startedAt))) && Array.isArray(r.pauses) &&
+    (r.pomo == null || (typeof r.pomo.work === 'number' && typeof r.pomo.brk === 'number'));
 }
 function importJson(file) {
   var fr = new FileReader();
@@ -256,12 +302,22 @@ var COLS = [ // [キー, 列名, 初期で含める?, 取り出し方]
   ['late', 'start_diff_minutes(+遅れ/-早め)', 1, function (r) { return (r.startMode === 'planned' && r.plannedStart && r.startedAt) ? ((Date.parse(r.startedAt) - Date.parse(r.plannedStart)) / 60000).toFixed(1) : ''; }],
   ['ach', 'achievement', 1, function (r) { return r.achievement || ''; }],
   ['foc', 'focus_1to5', 1, function (r) { return r.focus === null ? '' : r.focus; }],
+  ['pw', 'pomo_work_minutes_set', 1, function (r) { return r.pomo ? r.pomo.work : ''; }],
+  ['pb', 'pomo_break_minutes_set', 1, function (r) { return r.pomo ? r.pomo.brk : ''; }],
+  ['bn', 'break_count', 1, function (r) { return r.pomo ? breaks(r).n : ''; }],
+  ['bm', 'break_minutes', 1, function (r) { return r.pomo ? (breaks(r).ms / 60000).toFixed(1) : ''; }],
   ['task', 'task（自由記述）', 0, function (r) { return r.task; }],
   ['step', 'first_step（自由記述）', 0, function (r) { return r.firstStep; }],
   ['cond', 'end_condition（自由記述）', 0, function (r) { return r.endCondition; }],
   ['tro', 'trouble（自由記述）', 0, function (r) { return r.trouble; }],
   ['nxt', 'next_try（自由記述）', 0, function (r) { return r.nextTry; }]
 ];
+// 休憩（kind:'break' の一時停止）の回数と合計時間
+function breaks(r) {
+  var n = 0, ms = 0, end = r.endedAt ? Date.parse(r.endedAt) : Date.now();
+  (r.pauses || []).forEach(function (p) { if (p.kind === 'break') { n++; ms += (p.to ? Date.parse(p.to) : end) - Date.parse(p.from); } });
+  return { n: n, ms: ms };
+}
 function csvCell(v) {
   v = String(v);
   if (/^[=+\-@\t\r]/.test(v) && isNaN(Number(v))) v = "'" + v; // 表計算で数式にならないようにする
@@ -291,7 +347,7 @@ function deleteAll() {
 document.querySelectorAll('[data-go]').forEach(function (b) { b.onclick = function () { show(b.dataset.go); }; });
 $('plan-form').onsubmit = function (e) { e.preventDefault(); submitPlan('planned'); };
 $('btn-now').onclick = function () { submitPlan('now'); };
-$('btn-pause').onclick = pauseResume; $('btn-finish').onclick = finishRecord;
+$('btn-pause').onclick = pauseResume; $('pm-break').onclick = startBreak; $('pm-go').onclick = keepGoing; $('btn-finish').onclick = finishRecord;
 $('ref-form').onsubmit = submitReflect;
 $('p7').onclick = function () { period = '7'; renderLog(); }; $('pall').onclick = function () { period = 'all'; renderLog(); };
 $('b-json').onclick = exportJson; $('b-csv').onclick = exportCsv; $('b-del').onclick = deleteAll;

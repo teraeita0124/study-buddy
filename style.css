@@ -1,23 +1,77 @@
-:root{--bg:#f6f7f4;--ink:#1d2b2a;--accent:#1f6f6b;--line:#b9c4c0;--warn:#a33a2a}
+/* ===== 色と大きさ（ここを変えると全体の雰囲気が変わる） ===== */
+:root{color-scheme:light dark;
+--bg:#eef1f6;--surface:#fff;--ink:#101828;--muted:#5b6578;--accent:#2f5bff;--on-accent:#fff;
+--soft:#e3e9ff;--line:#d5dbe8;--field:#f1f3f9;--warn:#c2342b;--warn-bg:#fdeceb;--r:16px}
+@media (prefers-color-scheme:dark){:root{
+--bg:#0d1017;--surface:#171b26;--ink:#e9edf6;--muted:#9aa4b8;--accent:#8aa5ff;--on-accent:#0d1017;
+--soft:#232b45;--line:#2a3040;--field:#202636;--warn:#ff8a80;--warn-bg:#35191a}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.7 "Hiragino Sans","Yu Gothic",sans-serif}
-header,main{max-width:640px;margin:0 auto;padding:12px 16px}
-h1{font-size:1.3rem;margin:0}nav{display:flex;gap:8px;margin-top:8px}
-button,input,.file{font:inherit}
-button{min-height:48px;padding:0 16px;border:2px solid var(--accent);background:#fff;color:var(--accent);border-radius:8px;cursor:pointer}
-button[aria-pressed=true]{background:var(--accent);color:#fff}
-button.main{display:block;width:100%;margin:12px 0;background:var(--accent);color:#fff}
-button.alt{background:#fff;color:var(--accent)}button.danger{background:#fff;color:var(--warn);border-color:var(--warn)}
-label{display:block;margin:12px 0;font-weight:600}
-input:not([type=radio]):not([type=file]){display:block;width:100%;min-height:48px;padding:8px;border:2px solid var(--line);border-radius:8px;background:#fff}
-:focus-visible{outline:3px solid #e0a100;outline-offset:2px}
-label.r,.opt{display:inline-flex;align-items:center;gap:6px;margin:4px 12px 4px 0;font-weight:400;min-height:44px}
-input[type=radio],input[type=checkbox]{width:24px;height:24px}
-fieldset{border:1px solid var(--line);border-radius:8px;margin:12px 0}
-.big{font-size:1.5rem;font-weight:700;margin:0 0 12px;overflow-wrap:anywhere}.label,.hint{margin:0;font-size:.85rem;color:#506360}
-.timer{font-size:3.2rem;text-align:center;margin:16px 0;font-variant-numeric:tabular-nums}
-#err{background:#fbe9e5;border:2px solid var(--warn);color:var(--warn);padding:10px 16px;margin:0 16px}
-.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0;overflow-wrap:anywhere}
-.card button{min-height:44px;margin:4px 4px 0 0}
-.file{display:block;border:2px dashed var(--accent);border-radius:8px;padding:10px;margin:12px 0}
+body{margin:0;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%;
+font:17px/1.65 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif}
+header,main{max-width:620px;margin:0 auto;padding:20px 20px 0}
+header{padding-top:max(20px,env(safe-area-inset-top))}
+main{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+h1{font-size:1.5rem;font-weight:800;letter-spacing:-.01em;margin:0}
+h2{font-size:1.35rem;margin:8px 0 16px}
+h3{font-size:1rem;color:var(--muted);margin:28px 0 8px}
+p{margin:8px 0}
+
+/* 下のタブバー（スマホで親指が届く位置） */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:6px;
+padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+nav button{flex:1;background:transparent;color:var(--muted)}
+nav button[aria-pressed=true]{background:var(--soft);color:var(--accent)}
+
+/* ボタン */
+button{font:inherit;font-weight:700;min-height:52px;padding:0 20px;border:0;border-radius:14px;
+background:var(--soft);color:var(--accent);cursor:pointer;transition:transform .08s}
+button:active{transform:scale(.98)}
+.main{display:block;width:100%;margin:12px 0;background:var(--accent);color:var(--on-accent)}
+.main.alt{background:var(--soft);color:var(--accent)}
+.main.danger{background:var(--warn-bg);color:var(--warn)}
+.tab{min-height:44px;margin:0 8px 8px 0;border-radius:999px;background:var(--field);color:var(--ink)}
+.tab[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.card button{min-height:44px;margin:8px 8px 0 0;font-size:.9rem;padding:0 16px}
+
+/* 入力欄 */
+label{display:block;margin:14px 0;font-weight:700;font-size:.95rem}
+input{font:inherit}
+input:not([type=radio]):not([type=file]):not([type=checkbox]){display:block;width:100%;min-height:52px;margin-top:6px;
+padding:10px 14px;border:2px solid transparent;border-radius:12px;background:var(--field);color:var(--ink)}
+input::placeholder{color:var(--muted);opacity:.8}
+input:focus{border-color:var(--accent);outline:none}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input:focus-visible{outline:none}
+input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
+.opt{display:inline-flex;align-items:center;gap:8px;margin:4px 14px 4px 0;font-weight:500;min-height:44px}
+fieldset{margin:18px 0;padding:10px 16px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+legend{padding:0 6px;font-weight:700;font-size:.9rem;color:var(--muted)}
+.hint,.label{margin:0;font-size:.85rem;color:var(--muted)}
+
+/* 選択肢はチップ型。選ばれると色＋✓で分かる */
+label.r{position:relative;display:inline-flex;align-items:center;min-height:48px;margin:4px 8px 4px 0;padding:0 18px;
+border:2px solid transparent;border-radius:999px;background:var(--field);font-weight:500;cursor:pointer}
+label.r input{position:absolute;opacity:0;width:1px;height:1px}
+label.r:has(input:checked){background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+label.r:has(input:checked)::before{content:"✓";margin-right:6px}
+label.r:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
+
+/* 学習中：余計なものを置かず、時間と課題だけを大きく */
+#v-run{margin-top:8px;padding:24px 20px;background:var(--surface);border-radius:28px;border:1px solid var(--line)}
+.big{font-size:1.6rem;font-weight:800;line-height:1.35;margin:2px 0 18px;overflow-wrap:anywhere}
+.timer{font-size:clamp(3.6rem,19vw,5.4rem);font-weight:800;letter-spacing:-.03em;text-align:center;
+margin:20px 0 4px;color:var(--accent);font-variant-numeric:tabular-nums}
+#r-state,#r-pomo-info{text-align:center;color:var(--muted)}
+#r-pomo{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+
+/* 一覧と集計 */
+.card{padding:14px 16px;margin:10px 0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow-wrap:anywhere}
+#summary{margin:12px 0;padding:12px 16px;background:var(--soft);border-radius:var(--r);font-size:.95rem}
+#summary:empty{display:none}
+#err{width:calc(100% - 40px);max-width:580px;margin:12px auto 0;padding:12px 16px;border-radius:var(--r);background:var(--warn-bg);color:var(--warn);font-weight:700}
+.file{display:block;margin:12px 0;padding:14px 16px;border:2px dashed var(--accent);border-radius:var(--r);background:var(--surface);font-weight:700}
+.file input{display:block;margin-top:8px;font-weight:400}
+#data-msg{color:var(--muted)}
 [hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
