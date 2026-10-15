@@ -73,5 +73,8 @@ margin:20px 0 4px;color:var(--accent);font-variant-numeric:tabular-nums}
 .file{display:block;margin:12px 0;padding:14px 16px;border:2px dashed var(--accent);border-radius:var(--r);background:var(--surface);font-weight:700}
 .file input{display:block;margin-top:8px;font-weight:400}
 #data-msg{color:var(--muted)}
+#r-paused{margin-top:12px;padding:4px 16px 8px;background:var(--soft);border-radius:var(--r)}
+#r-resume{text-align:center;font-weight:700;color:var(--accent)}
+#insights .card{font-size:.95rem}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
