@@ -1,10 +1,10 @@
 /* ===== 色と大きさ（ここを変えると全体の雰囲気が変わる） ===== */
 :root{color-scheme:light dark;
 --bg:#eef1f6;--surface:#fff;--ink:#101828;--muted:#5b6578;--accent:#2f5bff;--on-accent:#fff;
---soft:#e3e9ff;--line:#d5dbe8;--field:#f1f3f9;--warn:#c2342b;--warn-bg:#fdeceb;--r:16px}
+--soft:#e3e9ff;--req-bg:#fff;--ok:#1e9e74;--line:#d5dbe8;--field:#f1f3f9;--warn:#c2342b;--warn-bg:#fdeceb;--r:16px}
 @media (prefers-color-scheme:dark){:root{
 --bg:#0d1017;--surface:#171b26;--ink:#e9edf6;--muted:#9aa4b8;--accent:#8aa5ff;--on-accent:#0d1017;
---soft:#232b45;--line:#2a3040;--field:#202636;--warn:#ff8a80;--warn-bg:#35191a}}
+--soft:#232b45;--req-bg:#262f4d;--ok:#5fd3a8;--line:#2a3040;--field:#202636;--warn:#ff8a80;--warn-bg:#35191a}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%;
 font:17px/1.65 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif}
@@ -76,5 +76,36 @@ margin:20px 0 4px;color:var(--accent);font-variant-numeric:tabular-nums}
 #r-paused{margin-top:12px;padding:4px 16px 8px;background:var(--soft);border-radius:var(--r)}
 #r-resume{text-align:center;font-weight:700;color:var(--accent)}
 #insights .card{font-size:.95rem}
+/* 必須（青い枠＋「必須」）と任意（グレー＋「任意」）。色だけに頼らず文字でも区別する */
+input[required]:not([type=radio]):not([type=file]):not([type=checkbox]){background:var(--req-bg);border-color:var(--accent)}
+label:has(>input[required])::before,label:has(>input:not([required]):not([type=radio]):not([type=checkbox]):not([type=file]))::before{float:right;font-size:.72rem;padding:1px 10px;border-radius:999px;line-height:1.6}
+label:has(>input[required])::before{content:"必須";background:var(--accent);color:var(--on-accent)}
+label:has(>input:not([required]):not([type=radio]):not([type=checkbox]):not([type=file]))::before{content:"任意";background:var(--field);color:var(--muted)}
+fieldset:has(input[name=ach]){border:2px solid var(--accent)}
+fieldset:has(input[name=ach]) legend::after{content:" 必須";color:var(--accent)}
+/* ドーナツ型タイマー */
+.donut{position:relative;width:min(72vw,280px);aspect-ratio:1;margin:12px auto}
+.donut svg{width:100%;height:100%;transform:rotate(-90deg)}
+.donut circle{fill:none;stroke-width:9}
+.donut .trk{stroke:var(--field)}
+.donut .bar{stroke:var(--accent);stroke-linecap:round;transition:stroke-dasharray .4s linear}
+.donut .bar.brk{stroke:var(--ok)}
+.donut .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.donut .timer{margin:0;font-size:clamp(2.4rem,13vw,3.6rem)}
+.center{text-align:center}
+header.top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.clock{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:700}
+body.focus nav{display:none}
+body.focus main{padding-bottom:40px}
+.about{margin:8px 0 12px;padding:4px 16px 8px;background:var(--soft);border-radius:var(--r);font-size:.95rem}
+.about summary{display:flex;align-items:center;min-height:44px;font-weight:700;cursor:pointer}
+.week{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:8px 0 4px}
+.wk{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.8rem;color:var(--muted)}
+.wk .bar{width:100%;max-width:36px;background:var(--line);border-radius:8px}
+.wk .bar.on{background:var(--accent)}
+.wide{flex-basis:100%}
+#tpl{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+#tpl button{min-height:44px;font-size:.9rem}
+#toast{padding:12px 16px;background:var(--soft);color:var(--accent);border-radius:var(--r);font-weight:700}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
