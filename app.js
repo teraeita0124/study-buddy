@@ -1,0 +1,299 @@
+'use strict';
+// ===== 設定 =====
+var KEY = 'gakushu-shien:v1';   // 保存キー（アプリ固有）
+var FMT = 1, APP_VER = '0.1.0'; // データ形式とアプリのバージョン
+var $ = function (id) { return document.getElementById(id); };
+var blocked = false;            // 壊れたデータを上書きしないための目印
+var editingId = null, period = '7';
+
+// ===== 保存 =====
+// 操作のたびに localStorage から読み直す → 別タブで更新された内容を壊さない
+function load() {
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) return { version: FMT, records: [] };
+    var d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.records)) throw new Error('bad');
+    blocked = false; return d;
+  } catch (e) {
+    blocked = true;
+    showErr('保存されたデータを読めませんでした。上書きを防ぐため保存を止めています。ブラウザの設定を確認してください。');
+    return { version: FMT, records: [] };
+  }
+}
+function save(d) {
+  if (blocked) return false;
+  try { localStorage.setItem(KEY, JSON.stringify(d)); hideErr(); return true; }
+  catch (e) { showErr('保存できませんでした。ブラウザの容量や、プライベートモードの設定を確認してください。この記録はまだ保存されていません。'); return false; }
+}
+// 読み直し→変更→保存。保存できたときだけ true
+function update(fn) { var d = load(); if (blocked) return false; var ok = fn(d); if (ok === false) return false; return save(d); }
+function showErr(m) { $('err').textContent = m; $('err').hidden = false; }
+function hideErr() { $('err').hidden = true; }
+function uid() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)); }
+function find(d, id) { return d.records.filter(function (r) { return r.id === id; })[0]; }
+function active(d) { return d.records.filter(function (r) { return r.status === 'running' || r.status === 'paused'; })[0]; }
+
+// ===== 時間計算 =====
+// 保存した時刻と「今」の差から求める。setIntervalの回数は使わない
+function measuredMs(r, now) {
+  if (!r.startedAt) return 0;
+  var end = r.endedAt ? Date.parse(r.endedAt) : now;
+  var total = end - Date.parse(r.startedAt);
+  (r.pauses || []).forEach(function (p) {
+    total -= (p.to ? Date.parse(p.to) : end) - Date.parse(p.from); // 一時停止の時間は引く
+  });
+  return Math.max(0, total);
+}
+function fmtClock(ms) {
+  var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  var p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return (h ? h + ':' + p(m) : m) + ':' + p(x);
+}
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }) : ''; }
+function nowIso() { return new Date().toISOString(); }
+
+// ===== 画面切り替え（同じHTML内） =====
+function show(name) {
+  ['today', 'run', 'reflect', 'log', 'data'].forEach(function (n) { $('v-' + n).hidden = n !== name; });
+  if (name === 'today') renderToday();
+  if (name === 'log') renderLog();
+  if (name === 'run') renderRun();
+  window.scrollTo(0, 0);
+}
+function routeByState() {
+  var d = load(), a = active(d);
+  if (a) return show('run');
+  var u = d.records.filter(function (r) { return r.status === 'ended'; })[0]; // 振り返り待ち
+  if (u) return show('reflect');
+  show('today');
+}
+
+// ===== 1. 今日の計画 =====
+function localInputValue(date) {
+  var z = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return z.toISOString().slice(0, 16);
+}
+function renderToday() {
+  var d = load();
+  var box = $('planned'); box.textContent = '';
+  var plans = d.records.filter(function (r) { return r.status === 'planned'; });
+  if (!plans.length) { var e = document.createElement('p'); e.textContent = 'まだ計画がありません。上のフォームから作れます。'; box.appendChild(e); }
+  plans.forEach(function (r) {
+    var c = document.createElement('div'); c.className = 'card';
+    c.appendChild(document.createTextNode(r.subject + '／' + r.task + (r.plannedStart ? '（' + fmtDate(r.plannedStart) + '）' : '')));
+    c.appendChild(document.createElement('br'));
+    c.appendChild(btn('学習を始める', function () { startRecord(r.id); }));
+    c.appendChild(btn('編集', function () { editPlan(r); }));
+    c.appendChild(btn('削除', function () { if (confirm('この計画を削除しますか？')) { update(function (d2) { d2.records = d2.records.filter(function (x) { return !(x.id === r.id && x.status === 'planned'); }); }); renderToday(); } }));
+    box.appendChild(c);
+  });
+  // 過去の「次回試すこと」
+  var tries = d.records.filter(function (r) { return r.nextTry; }).slice(-3).reverse();
+  $('next-box').hidden = !tries.length;
+  var nl = $('next-list'); nl.textContent = '';
+  tries.forEach(function (r) { nl.appendChild(btn(r.nextTry, function () { $('f-step').value = r.nextTry; })); });
+  if (!$('f-when').value) $('f-when').value = localInputValue(new Date());
+}
+function btn(text, fn) { var b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.onclick = fn; return b; }
+function editPlan(r) {
+  editingId = r.id;
+  $('f-subject').value = r.subject; $('f-task').value = r.task; $('f-step').value = r.firstStep; $('f-end').value = r.endCondition;
+  $('f-when').value = r.plannedStart ? localInputValue(new Date(r.plannedStart)) : '';
+  $('btn-save').textContent = '変更を保存';
+}
+function readForm(mode) {
+  var w = $('f-when').value;
+  return { subject: $('f-subject').value.trim(), task: $('f-task').value.trim(), firstStep: $('f-step').value.trim(),
+    endCondition: $('f-end').value.trim(), startMode: mode, plannedStart: (mode === 'planned' && w) ? new Date(w).toISOString() : null };
+}
+function submitPlan(mode) {
+  var f = $('plan-form');
+  if (!f.reportValidity()) return;
+  var data = readForm(mode), newId = uid(), ok;
+  if (editingId && mode === 'planned') {
+    ok = update(function (d) { var r = find(d, editingId); if (!r || r.status !== 'planned') return false; Object.assign(r, data); });
+  } else {
+    ok = update(function (d) {
+      if (mode === 'now' && active(d)) { showErr('すでに学習中です。'); return false; }
+      d.records.push(Object.assign({ id: newId, v: FMT, appVersion: APP_VER, status: 'planned', startedAt: null, endedAt: null, pauses: [],
+        achievement: null, focus: null, trouble: '', nextTry: '', adjusted: false }, data));
+    });
+  }
+  if (!ok) return;
+  editingId = null; f.reset(); $('btn-save').textContent = '計画を保存';
+  if (mode === 'now') startRecord(newId); else renderToday();
+}
+
+// ===== 2. 学習を始める・止める・終える =====
+// 状態: planned → running ⇄ paused → ended（振り返り待ち）→ done
+function startRecord(id) {
+  var ok = update(function (d) {
+    var r = find(d, id);
+    if (!r || r.status !== 'planned' || active(d)) return false; // 二重開始・連打を防ぐ
+    r.status = 'running'; r.startedAt = nowIso();
+  });
+  if (ok) show('run'); else routeByState();
+}
+function pauseResume() {
+  update(function (d) {
+    var r = active(d); if (!r) return false;
+    if (r.status === 'running') { r.status = 'paused'; r.pauses.push({ from: nowIso(), to: null }); }
+    else { r.status = 'running'; r.pauses[r.pauses.length - 1].to = nowIso(); }
+  });
+  renderRun();
+}
+function finishRecord() {
+  update(function (d) {
+    var r = active(d); if (!r) return false; // 終了後の再終了は何もしない
+    var t = nowIso();
+    if (r.status === 'paused') r.pauses[r.pauses.length - 1].to = t;
+    r.status = 'ended'; r.endedAt = t;
+  });
+  routeByState();
+}
+function renderRun() {
+  var d = load(), a = active(d);
+  if (!a) return;
+  $('r-task').textContent = a.task; $('r-end').textContent = a.endCondition;
+  $('r-time').textContent = fmtClock(measuredMs(a, Date.now()));
+  $('r-state').textContent = a.status === 'paused' ? '一時停止中（この時間は含まれません）' : '学習中';
+  $('btn-pause').textContent = a.status === 'paused' ? '再開' : '一時停止';
+}
+setInterval(function () { if (!$('v-run').hidden) renderRun(); }, 1000);
+// 別タブ・画面ロックから戻ったら、保存した時刻から再計算
+document.addEventListener('visibilitychange', function () { if (!document.hidden) routeByState(); });
+window.addEventListener('storage', function (e) { if (e.key === KEY) routeByState(); }); // 他のタブの変更を反映
+
+// ===== 3. 振り返り =====
+function buildFocus() {
+  var box = $('focus');
+  for (var i = 1; i <= 5; i++) {
+    var l = document.createElement('label'); l.className = 'r';
+    var inp = document.createElement('input'); inp.type = 'radio'; inp.name = 'focus'; inp.value = i; // 初期選択なし
+    l.appendChild(inp); l.appendChild(document.createTextNode(String(i))); box.appendChild(l);
+  }
+}
+function submitReflect(ev) {
+  ev.preventDefault();
+  var ach = document.querySelector('input[name=ach]:checked'), fc = document.querySelector('input[name=focus]:checked');
+  var ok = update(function (d) {
+    var r = d.records.filter(function (x) { return x.status === 'ended'; })[0]; if (!r) return false;
+    r.achievement = ach.value; r.focus = fc ? Number(fc.value) : null; // 未回答はnull（0や3にしない）
+    r.trouble = $('f-trouble').value.trim(); r.nextTry = $('f-next').value.trim(); r.status = 'done';
+  });
+  if (ok) { $('ref-form').reset(); show('log'); }
+}
+
+// ===== 4. 記録 =====
+var ACH = { achieved: '達成', partial: '一部達成', not: '未達成' };
+function renderLog() {
+  var d = load(), now = Date.now();
+  var recs = d.records.filter(function (r) { return r.status === 'done' && (period === 'all' || Date.parse(r.startedAt) >= now - 7 * 864e5); });
+  $('p7').setAttribute('aria-pressed', period === '7'); $('pall').setAttribute('aria-pressed', period === 'all');
+  var s = $('summary'), l = $('list'); s.textContent = ''; l.textContent = '';
+  if (!recs.length) { s.textContent = 'この期間の記録は0件です。学習を終えて振り返りを保存すると、ここに表示されます。'; return; }
+  var tot = recs.reduce(function (a, r) { return a + measuredMs(r, now); }, 0);
+  var pl = recs.filter(function (r) { return r.startMode === 'planned' && r.plannedStart; }); // 「今から始める」は除く
+  var txt = (period === '7' ? '直近7日' : '全期間') + '：' + recs.length + '件／操作記録の合計 ' + Math.round(tot / 60000) + '分';
+  if (pl.length) {
+    var avg = pl.reduce(function (a, r) { return a + (Date.parse(r.startedAt) - Date.parse(r.plannedStart)); }, 0) / pl.length / 60000;
+    txt += '／予定との差（平均、' + pl.length + '件）：' + (avg >= 0 ? Math.round(avg) + '分遅れ' : Math.round(-avg) + '分早め');
+  }
+  s.textContent = txt + '。計測時間はアプリの操作から求めた値で、実際に勉強していた時間を保証しません。';
+  recs.slice().reverse().forEach(function (r) {
+    var c = document.createElement('div'); c.className = 'card';
+    var lines = [r.subject + '／' + r.task, '予定：' + (r.plannedStart ? fmtDate(r.plannedStart) : '（今から始める）') + '　開始：' + fmtDate(r.startedAt),
+      '計測 ' + Math.round(measuredMs(r, now) / 60000) + '分　' + ACH[r.achievement] + '　集中：' + (r.focus === null ? '未回答' : r.focus),
+      r.trouble ? '困ったこと：' + r.trouble : '', r.nextTry ? '次回試すこと：' + r.nextTry : ''];
+    lines.filter(Boolean).forEach(function (t) { var p = document.createElement('div'); p.textContent = t; c.appendChild(p); });
+    l.appendChild(c);
+  });
+}
+
+// ===== 5. 書き出し・読み込み・削除 =====
+function download(name, text, type) {
+  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: type })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function stamp() { return new Date().toISOString().slice(0, 10); }
+function exportJson() { download('gakushu-' + stamp() + '.json', JSON.stringify(load(), null, 1), 'application/json'); }
+function validRecord(r) {
+  return r && typeof r.id === 'string' && typeof r.subject === 'string' && typeof r.task === 'string' &&
+    ['planned', 'running', 'paused', 'ended', 'done'].indexOf(r.status) >= 0 &&
+    (r.startedAt === null || !isNaN(Date.parse(r.startedAt))) && Array.isArray(r.pauses);
+}
+function importJson(file) {
+  var fr = new FileReader();
+  fr.onload = function () {
+    var inc;
+    try { inc = JSON.parse(fr.result); } catch (e) { return msg('JSONとして読めませんでした。現在の記録は変わっていません。'); }
+    if (!inc || !Array.isArray(inc.records) || !inc.records.every(validRecord)) return msg('このアプリの記録の形式ではありません。現在の記録は変わっていません。');
+    var added = 0, same = 0, conflict = 0;
+    var ok = update(function (d) {
+      inc.records.forEach(function (r) {
+        if (r.status === 'running' || r.status === 'paused') return; // 読み込みで計測中の状態は持ち込まない
+        var cur = find(d, r.id);
+        if (!cur) { d.records.push(r); added++; }
+        else if (JSON.stringify(cur) === JSON.stringify(r)) same++;
+        else conflict++; // 同じIDで内容が違う→上書きしない
+      });
+    });
+    if (ok) { msg('追加 ' + added + '件／同じ記録 ' + same + '件／IDが重複して内容が違うため追加しなかった ' + conflict + '件'); }
+  };
+  fr.readAsText(file);
+}
+function msg(t) { $('data-msg').textContent = t; }
+
+var COLS = [ // [キー, 列名, 初期で含める?, 取り出し方]
+  ['id', 'id', 1, function (r) { return r.id; }],
+  ['subject', 'subject', 1, function (r) { return r.subject; }],
+  ['mode', 'start_mode', 1, function (r) { return r.startMode; }],
+  ['plan', 'planned_start_iso', 1, function (r) { return r.plannedStart || ''; }],
+  ['st', 'started_at_iso', 1, function (r) { return r.startedAt || ''; }],
+  ['en', 'ended_at_iso', 1, function (r) { return r.endedAt || ''; }],
+  ['min', 'measured_minutes', 1, function (r) { return r.endedAt ? (measuredMs(r, 0) / 60000).toFixed(1) : ''; }],
+  ['late', 'start_diff_minutes(+遅れ/-早め)', 1, function (r) { return (r.startMode === 'planned' && r.plannedStart && r.startedAt) ? ((Date.parse(r.startedAt) - Date.parse(r.plannedStart)) / 60000).toFixed(1) : ''; }],
+  ['ach', 'achievement', 1, function (r) { return r.achievement || ''; }],
+  ['foc', 'focus_1to5', 1, function (r) { return r.focus === null ? '' : r.focus; }],
+  ['task', 'task（自由記述）', 0, function (r) { return r.task; }],
+  ['step', 'first_step（自由記述）', 0, function (r) { return r.firstStep; }],
+  ['cond', 'end_condition（自由記述）', 0, function (r) { return r.endCondition; }],
+  ['tro', 'trouble（自由記述）', 0, function (r) { return r.trouble; }],
+  ['nxt', 'next_try（自由記述）', 0, function (r) { return r.nextTry; }]
+];
+function csvCell(v) {
+  v = String(v);
+  if (/^[=+\-@\t\r]/.test(v) && isNaN(Number(v))) v = "'" + v; // 表計算で数式にならないようにする
+  return '"' + v.replace(/"/g, '""') + '"';
+}
+function exportCsv() {
+  var cols = COLS.filter(function (c) { return $('c-' + c[0]).checked; });
+  var rows = [cols.map(function (c) { return csvCell(c[1]); }).join(',')];
+  load().records.filter(function (r) { return r.status === 'done'; }).forEach(function (r) {
+    rows.push(cols.map(function (c) { return csvCell(c[3](r)); }).join(','));
+  });
+  download('gakushu-' + stamp() + '.csv', '\ufeff' + rows.join('\r\n'), 'text/csv'); // BOM付きでExcelの文字化けを防ぐ
+}
+function buildCsvOpts() {
+  COLS.forEach(function (c) {
+    var l = document.createElement('label'); l.className = 'opt';
+    var i = document.createElement('input'); i.type = 'checkbox'; i.id = 'c-' + c[0]; i.checked = !!c[2];
+    l.appendChild(i); l.appendChild(document.createTextNode(c[1])); $('csv-opts').appendChild(l);
+  });
+}
+function deleteAll() {
+  if (!confirm('このアプリの記録をすべて削除します。元に戻せません。先にJSONで書き出しておくと安心です。削除しますか？')) return;
+  try { localStorage.removeItem(KEY); blocked = false; msg('削除しました。'); } catch (e) { showErr('削除できませんでした。'); }
+}
+
+// ===== 起動 =====
+document.querySelectorAll('[data-go]').forEach(function (b) { b.onclick = function () { show(b.dataset.go); }; });
+$('plan-form').onsubmit = function (e) { e.preventDefault(); submitPlan('planned'); };
+$('btn-now').onclick = function () { submitPlan('now'); };
+$('btn-pause').onclick = pauseResume; $('btn-finish').onclick = finishRecord;
+$('ref-form').onsubmit = submitReflect;
+$('p7').onclick = function () { period = '7'; renderLog(); }; $('pall').onclick = function () { period = 'all'; renderLog(); };
+$('b-json').onclick = exportJson; $('b-csv').onclick = exportCsv; $('b-del').onclick = deleteAll;
+$('b-import').onchange = function (e) { if (e.target.files[0]) importJson(e.target.files[0]); e.target.value = ''; };
+buildFocus(); buildCsvOpts(); routeByState();

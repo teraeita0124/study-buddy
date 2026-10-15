@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日の学習</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><h1>今日の学習</h1>
+<nav aria-label="メニュー">
+<button data-go="today">計画</button><button data-go="log">記録</button><button data-go="data">データ</button>
+</nav></header>
+<div id="err" role="alert" hidden></div>
+<main>
+<section id="v-today">
+<h2>今日の学習を決める</h2>
+<form id="plan-form" autocomplete="off">
+<label>教科<input id="f-subject" required maxlength="30" placeholder="例：数学"></label>
+<label>取り組む課題<input id="f-task" required maxlength="80" placeholder="例：二次関数の問題"></label>
+<label>最初の一歩<input id="f-step" required maxlength="80" placeholder="例：問題1の図を描く"></label>
+<label>終了条件<input id="f-end" required maxlength="80" placeholder="例：問題1〜3を解き、誤りを確認する"></label>
+<label>開始予定日時<input id="f-when" type="datetime-local"></label>
+<div id="next-box" hidden><p>前回の「次回試すこと」（押すと最初の一歩に入ります）</p><div id="next-list"></div></div>
+<button type="submit" class="main" id="btn-save">計画を保存</button>
+<button type="button" class="main alt" id="btn-now">今から始める</button>
+</form>
+<h3>保存した計画</h3><div id="planned"></div>
+</section>
+
+<section id="v-run" hidden>
+<p class="label">今する課題</p><p id="r-task" class="big"></p>
+<p class="label">終了条件</p><p id="r-end" class="big"></p>
+<p id="r-time" class="timer" aria-live="off">0:00</p>
+<p id="r-state"></p>
+<button class="main" id="btn-pause">一時停止</button>
+<button class="main alt" id="btn-finish">学習を終える</button>
+</section>
+
+<section id="v-reflect" hidden>
+<h2>振り返り</h2>
+<form id="ref-form">
+<fieldset><legend>終了条件は？</legend>
+<label class="r"><input type="radio" name="ach" value="achieved" required>達成</label>
+<label class="r"><input type="radio" name="ach" value="partial">一部達成</label>
+<label class="r"><input type="radio" name="ach" value="not">未達成</label></fieldset>
+<fieldset><legend>今回の学習にどのくらい集中できましたか（任意）</legend>
+<p class="hint">1＝まったく集中できなかった　5＝とても集中できた</p>
+<div id="focus"></div></fieldset>
+<label>困ったこと（任意）<input id="f-trouble" maxlength="200"></label>
+<label>次回試すこと（任意）<input id="f-next" maxlength="200"></label>
+<button class="main" type="submit">保存する</button>
+</form>
+</section>
+
+<section id="v-log" hidden>
+<h2>自分の記録</h2>
+<div><button id="p7" class="tab" aria-pressed="true">直近7日</button><button id="pall" class="tab" aria-pressed="false">全期間</button></div>
+<div id="summary"></div><div id="list"></div>
+</section>
+
+<section id="v-data" hidden>
+<h2>データ</h2>
+<p>記録はこの端末・ブラウザだけに保存されます。他の端末には自動で共有されず、ブラウザのデータ削除で消えます。共有の端末では、同じブラウザを使う人に記録が見えることがあります。</p>
+<button class="main" id="b-json">JSONで書き出す</button>
+<label class="file">JSONを読み込む<input type="file" id="b-import" accept=".json,application/json"></label>
+<fieldset><legend>CSVに含める項目（提出用は自由記述と課題名を外しています）</legend><div id="csv-opts"></div></fieldset>
+<button class="main" id="b-csv">CSVで書き出す</button>
+<button class="main danger" id="b-del">全件削除</button>
+<p id="data-msg" role="status"></p>
+</section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
