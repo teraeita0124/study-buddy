@@ -1,143 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>今日の学習</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101a2f">
+  <meta name="description" content="計画して、始めて、学びを確かめる。学習習慣を支援するオフライン対応Webアプリ。">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Study Buddy | 学びの伴走者</title>
 </head>
 <body>
-<header class="top"><h1>今日の学習</h1><span id="now-clock" class="clock" aria-label="現在時刻"></span>
-<nav aria-label="メニュー">
-<button data-go="tasks">タスク</button><button data-go="today">計画</button><button data-go="log">記録</button><button data-go="peers">みんな</button><button data-go="data">データ</button>
-</nav></header>
-<div id="err" role="alert" hidden></div>
-<main>
-<section id="v-tasks" hidden>
-<h2>今日のタスク</h2><p id="t-date" class="hint"></p>
-<div id="t-carry"></div>
-<form id="task-form" autocomplete="off">
-<label>やること<input id="t-title" required maxlength="60" placeholder="例：英単語を20個覚える"></label>
-<label>教科<input id="t-subject" maxlength="30" placeholder="例：英語"></label>
-<fieldset><legend>優先度（自分で決める・あとで変えられる）</legend>
-<label class="r"><input type="radio" name="prio" value="1">高：先にやる</label>
-<label class="r"><input type="radio" name="prio" value="2" checked>中</label>
-<label class="r"><input type="radio" name="prio" value="3">低：余裕があれば</label></fieldset>
-<button class="main" type="submit">タスクを追加</button>
-</form>
-<div id="t-list"></div>
-<h3>今日の振り返り</h3><p id="rv-stat" class="hint"></p>
-<form id="rv-form" autocomplete="off">
-<label>今日できたこと<input id="rv-good" maxlength="200" placeholder="例：英単語を10個覚えた"></label>
-<label>明日に生かすこと<input id="rv-next" maxlength="200" placeholder="例：先に簡単な問題から始める"></label>
-<button class="main" type="submit">振り返りを保存</button><p id="rv-msg" role="status"></p>
-</form>
-</section>
-
-<section id="v-peers" hidden>
-<h2>仲間の状況</h2>
-<p>このアプリにはサーバーがないため、リアルタイムでは見られません。友だちが書き出した「状況カード」を読み込むと、その人の状況を見られます。</p>
-<fieldset><legend>自分の状況カード</legend>
-<label>表示名（本名でなくてよい）<input id="pc-name" maxlength="12" placeholder="例：ゆうと"></label>
-<p class="hint">カードに入るのは、直近7日の日ごとの学習分と、今日のタスクの完了数だけです。課題名・自由記述・個別の記録は入りません。渡す相手は自分で選べます。</p>
-<button class="main" id="pc-make">カードを書き出す</button></fieldset>
-<label class="file">仲間のカードを読み込む<input type="file" id="pc-import" accept=".json,application/json"></label>
-<p id="pc-msg" role="status" class="hint"></p>
-<div id="pc-list"></div>
-<p class="hint">並びは更新が新しい順で、順位ではありません。読み込んだカードはこの端末にだけ保存され、いつでも削除できます。</p>
-</section>
-
-<section id="v-today" hidden>
-<details class="about" open><summary>このアプリの考え方</summary>
-<p>前提：学習には、集中できる状態と、睡眠や開始時刻などの生活リズムの安定が土台になる、という考えでつくっています。</p>
-<p>私たちの調査（135回答）では、計画を立てる人ほど集中の自己評価が高く、開始時刻を決めている人ほど平日の学習時間が長い傾向が見えました。就寝時刻を決めている人ほど、計画も立てている傾向がありました。ただし原因までは確認できていません。短い時間でいいので、「いつ・何から」を決め、スマホから離れて始めてみましょう。</p></details>
-<h3>直近7日の積み上げ</h3><div id="week" class="week"></div>
-<h2>今日の学習を決める</h2>
-<p class="label">何から始めるか迷ったら、まず試す（押すと入力欄に入ります。効果は人によって違うので、振り返りで確かめましょう）</p>
-<div id="tpl"></div>
-<form id="plan-form" autocomplete="off">
-<label>教科<input id="f-subject" required maxlength="30" placeholder="例：数学"></label>
-<label>取り組む課題<input id="f-task" required maxlength="80" placeholder="例：二次関数の問題"></label>
-<label>最初の一歩<input id="f-step" required maxlength="80" placeholder="例：問題1の図を描く"></label>
-<label>終了条件<input id="f-end" required maxlength="80" placeholder="例：問題1〜3を解き、誤りを確認する"></label>
-<label>開始予定日時<input id="f-when" type="datetime-local"></label>
-<div id="usual"></div>
-<fieldset><legend>始める前の準備（任意）</legend><div id="ch-prep"></div>
-<label>昨夜の睡眠（時間）<input id="f-sleep" type="number" min="0" max="16" step="0.5" placeholder="例：7"></label></fieldset>
-<fieldset><legend>今回試す学習方法（任意・複数可）</legend><div id="ch-plan"></div>
-<label>その他（、で区切る）<input id="f-mcustom" maxlength="60" placeholder="例：図にまとめる"></label></fieldset>
-<fieldset><legend>区切りタイマー（ポモドーロ式・任意）</legend>
-<label class="opt"><input type="checkbox" id="f-pomo">使う</label>
-<label>作業（分）<input id="f-pw" type="number" min="1" max="180" value="25"></label>
-<label>休憩（分）<input id="f-pb" type="number" min="1" max="60" value="5"></label>
-<p class="hint">25分・5分は広く使われる例で、全員に最適という意味ではありません。自分に合わせて変えてください。時間が来ても自動では止まりません。</p></fieldset>
-<div id="next-box" hidden><p>前回の「次回試すこと」（押すと最初の一歩に入ります）</p><div id="next-list"></div></div>
-<button type="submit" class="main" id="btn-save">計画を保存</button>
-<button type="button" class="main alt" id="btn-now">今から始める</button>
-</form>
-<h3>保存した計画</h3><div id="planned"></div>
-</section>
-
-<section id="v-run" hidden>
-<p class="label">今する課題</p><p id="r-task" class="big"></p>
-<p class="label">終了条件</p><p id="r-end" class="big"></p>
-<div class="donut"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle id="ring" class="bar" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="0 100"/></svg>
-<div class="mid"><p id="r-time" class="timer">0:00</p><p id="r-phase" class="label"></p></div></div>
-<p id="r-total" class="label center"></p>
-<p class="hint center">スマホは見えない所へ。終わるまで、この画面だけ。</p>
-<p id="r-state"></p>
-<p id="r-methods" class="label"></p><p id="r-resume"></p>
-<div id="r-tasks"></div>
-<div id="r-pomo" hidden><p id="r-pomo-info"></p><button type="button" class="tab" id="b-sound">音：オン</button>
-<div id="r-pomo-alert" hidden role="status"><button class="main" id="pm-break">休憩する</button><button class="main alt" id="pm-go">続ける（次の区切りまで同じ時間）</button></div></div>
-<div id="r-paused" hidden><p class="label">休憩・一時停止の前に決めておく（任意）</p>
-<label>再開したら最初にすること<input id="f-rstep" maxlength="80" placeholder="例：問題2の式を書く"></label>
-<label>再開予定時刻<input id="f-rat" type="time"></label>
-<label id="rb-wrap">休憩の予定（分）<input id="f-rbrk" type="number" min="1" max="60"></label>
-<p class="hint">予定は目安です。時間になっても自動では再開しません。</p></div>
-<button class="main" id="btn-pause">一時停止</button>
-<button class="main alt" id="btn-finish">学習を終える</button>
-</section>
-
-<section id="v-reflect" hidden>
-<h2>振り返り</h2>
-<p id="leave-note" class="hint"></p>
-<form id="ref-form">
-<fieldset><legend>終了条件は？</legend>
-<label class="r"><input type="radio" name="ach" value="achieved" required>達成</label>
-<label class="r"><input type="radio" name="ach" value="partial">一部達成</label>
-<label class="r"><input type="radio" name="ach" value="not">未達成</label></fieldset>
-<fieldset><legend>今回の学習にどのくらい集中できましたか（任意）</legend>
-<p class="hint">1＝まったく集中できなかった　5＝とても集中できた</p>
-<div id="focus"></div></fieldset>
-<fieldset><legend>実際に行った学習方法（任意・複数可）</legend><div id="ch-used"></div>
-<label>その他（、で区切る）<input id="f-ucustom" maxlength="60"></label></fieldset>
-<fieldset><legend>困りごと（任意・複数可）</legend><div id="ch-trouble"></div></fieldset>
-<label>どこで困ったか（任意）<input id="f-trouble" maxlength="200"></label>
-<label>次回は何を変えるか（任意）<input id="f-next" maxlength="200"></label>
-<button class="main" type="submit">保存する</button>
-</form>
-</section>
-
-<section id="v-log" hidden>
-<h2>自分の記録</h2>
-<p id="toast" role="status" hidden></p>
-<div><button id="p7" class="tab" aria-pressed="true">直近7日</button><button id="pall" class="tab" aria-pressed="false">全期間</button></div>
-<div id="summary"></div><div id="insights"></div><div id="list"></div>
-</section>
-
-<section id="v-data" hidden>
-<h2>データ</h2>
-<p>記録はこの端末・ブラウザだけに保存されます。他の端末には自動で共有されず、ブラウザのデータ削除で消えます。共有の端末では、同じブラウザを使う人に記録が見えることがあります。</p>
-<button class="main" id="b-json">JSONで書き出す</button>
-<label class="file">JSONを読み込む<input type="file" id="b-import" accept=".json,application/json"></label>
-<fieldset><legend>CSVに含める項目（提出用は自由記述と課題名を外しています）</legend><div id="csv-opts"></div></fieldset>
-<button class="main" id="b-csv">CSVで書き出す</button>
-<button class="main danger" id="b-del">全件削除</button>
-<p id="data-msg" role="status"></p>
-</section>
-</main>
-<script src="app.js"></script>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="メインメニュー">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">✳</div>
+        <div class="brand-copy"><strong>Study Buddy</strong><span>今日の一歩を、続く習慣に。</span></div>
+      </div>
+      <div class="nav-heading">MY WORKSPACE</div>
+      <nav class="nav-list">
+        <button data-tab="home" class="nav-link active"><span aria-hidden="true">▦</span> ホーム</button>
+        <button data-tab="plan" class="nav-link"><span aria-hidden="true">☑</span> 学習計画</button>
+        <button data-tab="focus" class="nav-link"><span aria-hidden="true">◷</span> 集中タイマー</button>
+        <button data-tab="reflect" class="nav-link"><span aria-hidden="true">✎</span> 振り返り</button>
+        <button data-tab="insight" class="nav-link"><span aria-hidden="true">◫</span> 学習記録・比較</button>
+        <button data-tab="guide" class="nav-link"><span aria-hidden="true">✦</span> 勉強法のヒント</button>
+        <button data-tab="settings" class="nav-link"><span aria-hidden="true">⚙</span> 設定・データ管理</button>
+      </nav>
+      <div class="sidebar-footer"><span class="status-dot"></span>データはこの端末に保存<span class="muted">学校や外部には送信しません</span></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div><div class="breadcrumb">YOUR LEARNING SPACE</div><div class="topbar-label" id="header-title">今日のホーム</div></div>
+        <div class="top-right"><span class="date-chip" id="today-label"></span><button class="avatar-button" data-tab="settings" title="設定を開く" aria-label="設定を開く">☺</button></div>
+      </header>
+      <main id="view" class="main-content" tabindex="-1"></main>
+      <footer class="page-footer">Study Buddy · 自分に合う学び方を、記録から探そう。<span>学習支援用プロトタイプ / v1.0</span></footer>
+    </div>
+  </div>
+  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>

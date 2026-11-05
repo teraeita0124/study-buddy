@@ -1,0 +1,12 @@
+{
+  "name": "Study Buddy - 今日の一歩を、続く習慣に。",
+  "short_name": "Study Buddy",
+  "description": "学習計画・集中・振り返り・復習チェックを記録するオフライン対応アプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#101a2f",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
